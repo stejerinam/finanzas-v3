@@ -62,6 +62,59 @@ ${text.slice(0, 100000)}`;
         model: 'claude-sonnet-4-6',
         max_tokens: 16000,
         temperature: 0,
+        output_config: {
+          format: {
+            type: 'json_schema',
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                bank:        { type: 'string' },
+                country:     { type: 'string' },
+                accountType: { type: 'string', enum: ['credit','debit','savings','checking'] },
+                currency:    { type: 'string' },
+                periodStart: { type: 'string' },
+                periodEnd:   { type: 'string' },
+                transactions: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    properties: {
+                      date:               { type: 'string' },
+                      description:        { type: 'string' },
+                      amount:             { type: 'number' },
+                      direction:          { type: 'string', enum: ['credit','debit'] },
+                      type:               { type: ['string','null'] },
+                      reference:          { type: ['string','null'] },
+                      merchantHint:       { type: ['string','null'] },
+                      counterpartyName:   { type: ['string','null'] },
+                      counterpartyAccount:{ type: ['string','null'] },
+                    },
+                    required: ['date','description','amount','direction','type','reference','merchantHint','counterpartyName','counterpartyAccount'],
+                  },
+                },
+                msiPlans: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    properties: {
+                      description:       { type: 'string' },
+                      originalAmount:    { type: 'number' },
+                      pendingTotal:      { type: 'number' },
+                      monthlyPayment:    { type: 'number' },
+                      installmentNumber: { type: 'number' },
+                      totalInstallments: { type: 'number' },
+                    },
+                    required: ['description','originalAmount','pendingTotal','monthlyPayment','installmentNumber','totalInstallments'],
+                  },
+                },
+              },
+              required: ['bank','country','accountType','currency','periodStart','periodEnd','transactions','msiPlans'],
+            },
+          },
+        },
         messages: [{ role: 'user', content: prompt }],
       }),
     });
