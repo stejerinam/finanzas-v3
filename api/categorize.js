@@ -99,7 +99,7 @@ Be concise in reasoning (max 10 words).`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 8000,
+        max_tokens: 16000,
         temperature: 0,
         output_config: {
           format: {
