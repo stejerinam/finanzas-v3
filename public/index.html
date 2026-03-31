@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finanzas v3 · Pipeline Tester</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&family=Cabinet+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#080909;--surface:#111214;--surface2:#191b1e;--border:#252729;--border2:#2e3033;
+  --text:#edeae4;--muted:#5a5e68;--muted2:#3a3d45;
+  --green:#b8f552;--teal:#52f5c8;--red:#f55252;--yellow:#f5c852;--blue:#52aaf5;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Cabinet Grotesk',sans-serif;min-height:100vh;padding:40px 20px;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;opacity:0.02;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:128px;z-index:999;}
+
+.container{max-width:1100px;margin:0 auto;}
+.header{margin-bottom:36px;}
+.eyebrow{font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--green);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.eyebrow::before{content:'';width:20px;height:1px;background:var(--green);}
+h1{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;letter-spacing:-0.03em;margin-bottom:6px;}
+h1 em{color:var(--green);font-style:normal;}
+.subtitle{color:var(--muted);font-size:0.88rem;line-height:1.6;}
+
+/* UPLOAD */
+.upload-zone{background:var(--surface);border:1.5px dashed var(--border2);border-radius:16px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s;position:relative;margin-bottom:16px;}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--green);background:rgba(184,245,82,0.03);}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon{font-size:2rem;margin-bottom:8px;}
+.upload-label{font-size:0.88rem;color:var(--muted);}
+.upload-label strong{color:var(--text);}
+.upload-label span{font-size:0.75rem;display:block;margin-top:4px;color:var(--muted2);}
+
+.btn{padding:11px 22px;border-radius:10px;font-size:0.88rem;font-weight:600;cursor:pointer;font-family:'Cabinet Grotesk',sans-serif;transition:all 0.18s;border:none;}
+.btn-primary{background:var(--green);color:#000;}
+.btn-primary:hover{opacity:0.88;}
+.btn-primary:disabled{opacity:0.35;cursor:not-allowed;}
+.btn-secondary{background:transparent;border:1px solid var(--border2);color:var(--text);}
+.btn-secondary:hover{border-color:var(--muted);}
+.btn-download{background:var(--teal);color:#000;}
+.btn-download:hover{opacity:0.88;}
+
+/* PIPELINE STEPS */
+.pipeline{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0;}
+.step-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;}
+.step-card.active{border-color:rgba(184,245,82,0.4);}
+.step-card.done{border-color:rgba(82,245,200,0.3);}
+.step-card.error{border-color:rgba(245,82,82,0.3);}
+.step-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.step-num{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--muted);flex-shrink:0;}
+.step-card.active .step-num{border-color:var(--green);color:var(--green);}
+.step-card.done .step-num{background:var(--teal);border-color:var(--teal);color:#000;}
+.step-card.error .step-num{background:var(--red);border-color:var(--red);color:#fff;}
+.step-title{font-size:0.88rem;font-weight:600;}
+.step-status{font-size:0.75rem;color:var(--muted);font-family:'DM Mono',monospace;}
+.step-card.active .step-status{color:var(--green);}
+.step-card.done .step-status{color:var(--teal);}
+.step-card.error .step-status{color:var(--red);}
+.spinner{display:inline-block;width:12px;height:12px;border:1.5px solid rgba(184,245,82,0.3);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;margin-right:4px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* METADATA */
+.meta-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;}
+.meta-pill{background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:6px 12px;font-size:0.75rem;font-family:'DM Mono',monospace;color:var(--muted);}
+.meta-pill strong{color:var(--text);}
+
+/* RESULTS TABLE */
+.results-section{margin-bottom:24px;}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.section-title{font-size:0.82rem;font-weight:600;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);}
+.section-count{font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--muted);background:var(--surface2);padding:2px 8px;border-radius:20px;}
+
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:auto;max-height:420px;}
+.table-wrap::-webkit-scrollbar{width:4px;height:4px;}
+.table-wrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+table{width:100%;border-collapse:collapse;font-size:0.78rem;}
+th{text-align:left;padding:9px 14px;font-size:0.64rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:400;font-family:'DM Mono',monospace;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:5;white-space:nowrap;}
+td{padding:8px 14px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--surface2);}
+.td-date{font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--muted);white-space:nowrap;}
+.td-desc{max-width:240px;}
+.td-amt{font-family:'DM Mono',monospace;text-align:right;white-space:nowrap;}
+.td-amt.credit{color:var(--green);}
+.td-amt.debit{color:var(--text);}
+.td-type{font-size:0.7rem;color:var(--muted);white-space:nowrap;}
+.td-ref{font-size:0.72rem;color:var(--blue);max-width:160px;}
+.td-merchant{font-size:0.72rem;color:var(--teal);max-width:160px;}
+.pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.66rem;font-family:'DM Mono',monospace;border:1px solid;}
+.cat-pill{color:var(--text);border-color:var(--border2);background:var(--surface2);}
+.conf-high{color:var(--green);border-color:rgba(184,245,82,0.3);}
+.conf-mid{color:var(--yellow);border-color:rgba(245,200,82,0.3);}
+.conf-low{color:var(--red);border-color:rgba(245,82,82,0.3);}
+.unassigned-pill{color:var(--yellow);border-color:rgba(245,200,82,0.3);background:rgba(245,200,82,0.06);}
+.reasoning{font-size:0.68rem;color:var(--muted);font-style:italic;}
+
+/* SUMMARY */
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
+.sum-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+.sum-label{font-size:0.64rem;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;}
+.sum-value{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:700;letter-spacing:-0.02em;}
+.sum-value.green{color:var(--green);}
+.sum-value.yellow{color:var(--yellow);}
+
+.actions{display:flex;gap:10px;margin-top:20px;}
+.error-box{background:rgba(245,82,82,0.06);border:1px solid rgba(245,82,82,0.3);border-radius:10px;padding:14px 16px;font-size:0.82rem;color:var(--red);margin:12px 0;}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="eyebrow">Finanzas · v3 · Pipeline Tester</div>
+    <h1>Categorization <em>Diagnostic</em></h1>
+    <p class="subtitle">Upload any bank statement to test the AI parse + categorize pipeline. Download results as Excel to review and give feedback.</p>
+  </div>
+
+  <!-- Upload -->
+  <div class="upload-zone" id="drop-zone">
+    <input type="file" id="file-input" accept=".pdf,.xlsx,.xls,.csv">
+    <div class="upload-icon">📄</div>
+    <div class="upload-label">
+      <strong>Drop your bank statement here</strong>
+      <span>PDF, Excel (.xlsx), or CSV · Any bank, any country</span>
+    </div>
+  </div>
+  <div id="file-name" style="font-size:0.78rem;color:var(--muted);margin-bottom:16px;font-family:'DM Mono',monospace;"></div>
+
+  <button class="btn btn-primary" id="btn-run" disabled onclick="runPipeline()">Run Pipeline →</button>
+
+  <!-- Pipeline status -->
+  <div class="pipeline" id="pipeline" style="display:none">
+    <div class="step-card" id="step-extract">
+      <div class="step-header">
+        <div class="step-num" id="sn-extract">1</div>
+        <div>
+          <div class="step-title">Extract Text</div>
+          <div class="step-status" id="ss-extract">Waiting…</div>
+        </div>
+      </div>
+    </div>
+    <div class="step-card" id="step-parse">
+      <div class="step-header">
+        <div class="step-num" id="sn-parse">2</div>
+        <div>
+          <div class="step-title">AI Parse</div>
+          <div class="step-status" id="ss-parse">Waiting…</div>
+        </div>
+      </div>
+    </div>
+    <div class="step-card" id="step-categorize">
+      <div class="step-header">
+        <div class="step-num" id="sn-cat">3</div>
+        <div>
+          <div class="step-title">AI Categorize</div>
+          <div class="step-status" id="ss-cat">Waiting…</div>
+        </div>
+      </div>
+    </div>
+    <div class="step-card" id="step-export">
+      <div class="step-header">
+        <div class="step-num" id="sn-export">4</div>
+        <div>
+          <div class="step-title">Export</div>
+          <div class="step-status" id="ss-export">Waiting…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results" style="display:none">
+    <!-- Metadata -->
+    <div class="meta-bar" id="meta-bar"></div>
+
+    <!-- Summary -->
+    <div class="summary-grid" id="summary-grid"></div>
+
+    <!-- Step 2 output -->
+    <div class="results-section">
+      <div class="section-header">
+        <span class="section-title">Step 2 — Parsed Transactions</span>
+        <span class="section-count" id="parse-count">0 rows</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>#</th><th>Date</th><th>Description</th><th>Type</th>
+            <th>Reference</th><th>Merchant</th><th>Counterparty</th>
+            <th style="text-align:right">Amount</th><th>Dir</th>
+          </tr></thead>
+          <tbody id="parse-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Step 3 output -->
+    <div class="results-section">
+      <div class="section-header">
+        <span class="section-title">Step 3 — Categorized</span>
+        <span class="section-count" id="cat-count">0 rows</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>#</th><th>Date</th><th>Description</th><th>Reference</th>
+            <th style="text-align:right">Amount</th><th>Dir</th>
+            <th>Category</th><th>Confidence</th><th>Reasoning</th>
+          </tr></thead>
+          <tbody id="cat-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-download" onclick="downloadExcel()">⬇ Download Excel</button>
+      <button class="btn btn-secondary" onclick="reset()">↺ Test another file</button>
+    </div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const CONFIDENCE_THRESHOLD = 0.70;
+
+let currentFile = null;
+let parsedData = null;
+let categorizedData = null;
+
+// FILE HANDLING
+const dz = document.getElementById('drop-zone');
+const fi = document.getElementById('file-input');
+dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('dragover');});
+dz.addEventListener('dragleave', ()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop', e=>{e.preventDefault();dz.classList.remove('dragover');setFile(e.dataTransfer.files[0]);});
+fi.addEventListener('change', e=>{setFile(e.target.files[0]);fi.value='';});
+
+function setFile(file) {
+  if (!file) return;
+  currentFile = file;
+  document.getElementById('file-name').textContent = `📎 ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+  document.getElementById('btn-run').disabled = false;
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('pipeline').style.display = 'none';
+}
+
+// TEXT EXTRACTION
+async function extractText(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'pdf') {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+    let txt = '';
+    for (let i=1; i<=pdf.numPages; i++) {
+      const pg = await pdf.getPage(i);
+      const ct = await pg.getTextContent();
+      txt += ct.items.map(x=>x.str).join(' ') + '\n';
+    }
+    return txt;
+  }
+  if (['xlsx','xls'].includes(ext)) {
+    return new Promise((res,rej)=>{
+      const r = new FileReader();
+      r.onload = e => {
+        try {
+          const wb = XLSX.read(e.target.result, {type:'array'});
+          let txt = '';
+          wb.SheetNames.forEach(n => {
+            txt += `\n--- Sheet: ${n} ---\n`;
+            txt += XLSX.utils.sheet_to_csv(wb.Sheets[n]);
+          });
+          res(txt);
+        } catch(err){rej(err);}
+      };
+      r.onerror = rej;
+      r.readAsArrayBuffer(file);
+    });
+  }
+  return file.text();
+}
+
+// PII STRIP
+function stripPII(text) {
+  return text
+    .replace(/R\.?F\.?C\.?\s*:?\s*[A-Z]{3,4}\d{6}[A-Z0-9]{3}/gi, 'RFC:[REDACTED]')
+    .replace(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CARD]');
+}
+
+// STEP STATUS
+function setStep(id, state, msg) {
+  const card = document.getElementById(`step-${id}`);
+  const num  = document.getElementById(`sn-${id}`);
+  const stat = document.getElementById(`ss-${id}`);
+  card.className = `step-card ${state}`;
+  stat.innerHTML = state === 'active' ? `<span class="spinner"></span>${msg}` : msg;
+  if (state === 'done') num.textContent = '✓';
+  if (state === 'error') num.textContent = '✗';
+}
+
+// MAIN PIPELINE
+async function runPipeline() {
+  if (!currentFile) return;
+  document.getElementById('pipeline').style.display = 'grid';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('btn-run').disabled = true;
+
+  // Step 1: Extract
+  setStep('extract', 'active', 'Reading file…');
+  let rawText;
+  try {
+    rawText = await extractText(currentFile);
+    rawText = stripPII(rawText);
+    setStep('extract', 'done', `${rawText.length.toLocaleString()} characters extracted`);
+  } catch(e) {
+    setStep('extract', 'error', e.message);
+    document.getElementById('btn-run').disabled = false;
+    return;
+  }
+
+  // Step 2: AI Parse
+  setStep('parse', 'active', 'Sending to AI…');
+  try {
+    const r = await fetch('/api/parse', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({text: rawText, filename: currentFile.name})
+    });
+    parsedData = await r.json();
+    if (parsedData.error) throw new Error(parsedData.error);
+    const n = parsedData.transactions?.length || 0;
+    setStep('parse', 'done', `${n} transactions extracted`);
+  } catch(e) {
+    setStep('parse', 'error', e.message);
+    document.getElementById('btn-run').disabled = false;
+    return;
+  }
+
+  // Step 3: AI Categorize
+  setStep('categorize', 'active', 'Categorizing…');
+  try {
+    const txns = parsedData.transactions || [];
+    const r = await fetch('/api/categorize', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        transactions: txns,
+        currency: parsedData.currency,
+        country: parsedData.country,
+      })
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    categorizedData = d.results;
+
+    // Apply confidence threshold
+    categorizedData = categorizedData.map(c => ({
+      ...c,
+      finalCategory: c.confidence >= CONFIDENCE_THRESHOLD ? c.category : 'unassigned',
+      autoUnassigned: c.confidence < CONFIDENCE_THRESHOLD && c.category !== 'unassigned',
+    }));
+
+    const unassigned = categorizedData.filter(c=>c.finalCategory==='unassigned').length;
+    setStep('categorize', 'done', `${txns.length - unassigned} categorized, ${unassigned} unassigned`);
+  } catch(e) {
+    setStep('categorize', 'error', e.message);
+    document.getElementById('btn-run').disabled = false;
+    return;
+  }
+
+  // Step 4: Render
+  setStep('export', 'active', 'Rendering results…');
+  renderResults();
+  setStep('export', 'done', 'Ready to download');
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('btn-run').disabled = false;
+}
+
+function renderResults() {
+  const txns = parsedData.transactions || [];
+  const cats = categorizedData || [];
+
+  // Metadata
+  document.getElementById('meta-bar').innerHTML = [
+    ['Bank', parsedData.bank],
+    ['Country', parsedData.country],
+    ['Account', parsedData.accountType],
+    ['Currency', parsedData.currency],
+    ['Period', `${parsedData.periodStart} → ${parsedData.periodEnd}`],
+  ].filter(([,v])=>v).map(([k,v])=>`<div class="meta-pill"><strong>${k}:</strong> ${v}</div>`).join('');
+
+  // Summary
+  const totalTxns = txns.length;
+  const assigned = cats.filter(c=>c.finalCategory!=='unassigned').length;
+  const autoUnassigned = cats.filter(c=>c.autoUnassigned).length;
+  const avgConf = cats.length ? (cats.reduce((s,c)=>s+c.confidence,0)/cats.length*100).toFixed(0) : 0;
+  document.getElementById('summary-grid').innerHTML = `
+    <div class="sum-card"><div class="sum-label">Total transactions</div><div class="sum-value">${totalTxns}</div></div>
+    <div class="sum-card"><div class="sum-label">Categorized</div><div class="sum-value green">${assigned}</div></div>
+    <div class="sum-card"><div class="sum-label">Unassigned</div><div class="sum-value yellow">${totalTxns-assigned}</div></div>
+    <div class="sum-card"><div class="sum-label">Avg confidence</div><div class="sum-value">${avgConf}%</div></div>`;
+
+  // Parse table
+  document.getElementById('parse-count').textContent = `${totalTxns} rows`;
+  document.getElementById('parse-body').innerHTML = txns.map((t,i)=>`
+    <tr>
+      <td class="td-date" style="color:var(--muted2)">${i+1}</td>
+      <td class="td-date">${t.date||'—'}</td>
+      <td class="td-desc">${esc(t.description||'')}</td>
+      <td class="td-type">${esc(t.type||'')}</td>
+      <td class="td-ref">${esc(t.reference||'')}</td>
+      <td class="td-merchant">${esc(t.merchantHint||'')}</td>
+      <td style="font-size:0.7rem;color:var(--muted);max-width:140px">${esc(t.counterpartyName||'')}</td>
+      <td class="td-amt ${t.direction}">${fmt(t.amount, parsedData.currency)}</td>
+      <td><span class="pill" style="color:${t.direction==='credit'?'var(--green)':'var(--muted)'};border-color:${t.direction==='credit'?'rgba(184,245,82,0.3)':'var(--border)'}">${t.direction||'?'}</span></td>
+    </tr>`).join('');
+
+  // Categorize table
+  document.getElementById('cat-count').textContent = `${cats.length} rows`;
+  document.getElementById('cat-body').innerHTML = cats.map((c,i)=>{
+    const t = txns[i] || {};
+    const conf = Math.round((c.confidence||0)*100);
+    const confClass = conf>=85?'conf-high':conf>=70?'conf-mid':'conf-low';
+    const isUnassigned = c.finalCategory==='unassigned';
+    return`<tr>
+      <td class="td-date" style="color:var(--muted2)">${i+1}</td>
+      <td class="td-date">${t.date||'—'}</td>
+      <td class="td-desc">${esc(t.description||'')}</td>
+      <td class="td-ref">${esc(t.reference||'')}</td>
+      <td class="td-amt ${t.direction}">${fmt(t.amount, parsedData.currency)}</td>
+      <td><span class="pill" style="color:${t.direction==='credit'?'var(--green)':'var(--muted)'};border-color:${t.direction==='credit'?'rgba(184,245,82,0.3)':'var(--border)'}">${t.direction||'?'}</span></td>
+      <td><span class="pill ${isUnassigned?'unassigned-pill':'cat-pill'}">${c.finalCategory}${c.autoUnassigned?` (was: ${c.category})`:''}${isUnassigned&&!c.autoUnassigned?'':''}</span></td>
+      <td><span class="pill ${confClass}">${conf}%</span></td>
+      <td class="reasoning">${esc(c.reasoning||'')}</td>
+    </tr>`;
+  }).join('');
+}
+
+// EXCEL EXPORT
+function downloadExcel() {
+  const txns = parsedData?.transactions || [];
+  const cats = categorizedData || [];
+
+  const parseRows = txns.map((t,i) => ({
+    '#': i+1,
+    'Date': t.date,
+    'Description': t.description,
+    'Type': t.type,
+    'Reference': t.reference,
+    'Merchant Hint': t.merchantHint,
+    'Counterparty Name': t.counterpartyName,
+    'Counterparty Account': t.counterpartyAccount,
+    'Amount': t.amount,
+    'Direction': t.direction,
+  }));
+
+  const catRows = txns.map((t,i) => {
+    const c = cats[i] || {};
+    return {
+      '#': i+1,
+      'Date': t.date,
+      'Description': t.description,
+      'Type': t.type,
+      'Reference': t.reference,
+      'Merchant Hint': t.merchantHint,
+      'Amount': t.amount,
+      'Direction': t.direction,
+      'AI Category': c.category,
+      'Final Category': c.finalCategory,
+      'Confidence %': Math.round((c.confidence||0)*100),
+      'Auto-Unassigned': c.autoUnassigned ? 'YES' : '',
+      'Reasoning': c.reasoning,
+    };
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parseRows), 'Step 2 - Parsed');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'Step 3 - Categorized');
+
+  // Add metadata sheet
+  const meta = [
+    {Field:'Bank', Value: parsedData.bank},
+    {Field:'Country', Value: parsedData.country},
+    {Field:'Account Type', Value: parsedData.accountType},
+    {Field:'Currency', Value: parsedData.currency},
+    {Field:'Period Start', Value: parsedData.periodStart},
+    {Field:'Period End', Value: parsedData.periodEnd},
+    {Field:'Total Transactions', Value: txns.length},
+    {Field:'Categorized', Value: cats.filter(c=>c.finalCategory!=='unassigned').length},
+    {Field:'Unassigned', Value: cats.filter(c=>c.finalCategory==='unassigned').length},
+    {Field:'Confidence Threshold', Value: `${CONFIDENCE_THRESHOLD*100}%`},
+    {Field:'Avg Confidence', Value: `${cats.length?(cats.reduce((s,c)=>s+c.confidence,0)/cats.length*100).toFixed(1):0}%`},
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(meta), 'Metadata');
+
+  const filename = `finanzas-v3-${(parsedData.bank||'bank').toLowerCase()}-${parsedData.periodStart||'unknown'}.xlsx`;
+  XLSX.writeFile(wb, filename);
+}
+
+function reset() {
+  currentFile = null; parsedData = null; categorizedData = null;
+  document.getElementById('file-name').textContent = '';
+  document.getElementById('btn-run').disabled = true;
+  document.getElementById('pipeline').style.display = 'none';
+  document.getElementById('results').style.display = 'none';
+  ['extract','parse','categorize','export'].forEach(id=>{
+    document.getElementById(`step-${id}`).className='step-card';
+    document.getElementById(`ss-${id}`).textContent='Waiting…';
+    const n=document.getElementById(`sn-${id}`);
+    n.textContent=n.textContent==='✓'||n.textContent==='✗'?['1','2','3','4'][['extract','parse','categorize','export'].indexOf(id)]:n.textContent;
+  });
+}
+
+function fmt(n, currency='USD') {
+  try { return new Intl.NumberFormat('es-MX',{style:'currency',currency,minimumFractionDigits:2,maximumFractionDigits:2}).format(n); }
+  catch { return n?.toFixed(2)||'—'; }
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
