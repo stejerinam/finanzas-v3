@@ -79,7 +79,15 @@ Return ONLY a JSON array, one object per transaction, in the same order:
   }
 ]
 
-Be concise in reasoning (max 10 words). Return ONLY the JSON array, no markdown.`;
+Be concise in reasoning (max 10 words).`;
+
+  // Valid category values for the schema
+  const VALID_CATEGORIES = [
+    'food','cafe','groceries','transport','health','subscriptions',
+    'shopping','education','rent','entertainment','fitness','travel','other',
+    'salary','freelance','reimbursement','other_income',
+    'internal_transfer','unassigned'
+  ];
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -90,8 +98,27 @@ Be concise in reasoning (max 10 words). Return ONLY the JSON array, no markdown.
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 8000,
+        temperature: 0,
+        output_config: {
+          format: {
+            type: 'json_schema',
+            schema: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  index:     { type: 'number' },
+                  category:  { type: 'string', enum: VALID_CATEGORIES },
+                  confidence:{ type: 'number', minimum: 0, maximum: 1 },
+                  reasoning: { type: 'string' },
+                },
+                required: ['index','category','confidence','reasoning'],
+              },
+            },
+          },
+        },
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -99,18 +126,13 @@ Be concise in reasoning (max 10 words). Return ONLY the JSON array, no markdown.
     const data = await response.json();
     if (data.error) return res.status(502).json({ error: data.error.message });
 
-    const raw = data.content?.[0]?.text || '';
-    let jsonStr = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    const firstBracket = jsonStr.indexOf('[');
-    if (firstBracket > 0) jsonStr = jsonStr.slice(firstBracket);
-    const lastBracket = jsonStr.lastIndexOf(']');
-    if (lastBracket !== -1) jsonStr = jsonStr.slice(0, lastBracket + 1);
-
+    // Structured output guarantees valid JSON array
+    const raw = data.content?.[0]?.text || '[]';
     let results;
     try {
-      results = JSON.parse(jsonStr);
+      results = JSON.parse(raw);
     } catch (e) {
-      return res.status(500).json({ error: 'Could not parse categorization response', raw: raw.slice(0, 300) });
+      return res.status(500).json({ error: 'Structured output parse failed', raw: raw.slice(0, 300) });
     }
 
     return res.status(200).json({ results });

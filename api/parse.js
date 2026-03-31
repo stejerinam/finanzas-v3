@@ -59,8 +59,59 @@ ${text.slice(0, 100000)}`;
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 16000,
+        temperature: 0,
+        output_config: {
+          format: {
+            type: 'json_schema',
+            schema: {
+              type: 'object',
+              properties: {
+                bank:        { type: 'string' },
+                country:     { type: 'string' },
+                accountType: { type: 'string', enum: ['credit','debit','savings','checking'] },
+                currency:    { type: 'string' },
+                periodStart: { type: 'string' },
+                periodEnd:   { type: 'string' },
+                transactions: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      date:               { type: 'string' },
+                      description:        { type: 'string' },
+                      amount:             { type: 'number' },
+                      direction:          { type: 'string', enum: ['credit','debit'] },
+                      type:               { type: ['string','null'] },
+                      reference:          { type: ['string','null'] },
+                      merchantHint:       { type: ['string','null'] },
+                      counterpartyName:   { type: ['string','null'] },
+                      counterpartyAccount:{ type: ['string','null'] },
+                    },
+                    required: ['date','description','amount','direction'],
+                  },
+                },
+                msiPlans: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      description:       { type: 'string' },
+                      originalAmount:    { type: 'number' },
+                      pendingTotal:      { type: 'number' },
+                      monthlyPayment:    { type: 'number' },
+                      installmentNumber: { type: 'number' },
+                      totalInstallments: { type: 'number' },
+                    },
+                    required: ['description','monthlyPayment'],
+                  },
+                },
+              },
+              required: ['bank','accountType','currency','transactions'],
+            },
+          },
+        },
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -68,21 +119,13 @@ ${text.slice(0, 100000)}`;
     const data = await response.json();
     if (data.error) return res.status(502).json({ error: data.error.message });
 
-    const raw = data.content?.[0]?.text || '';
-    let jsonStr = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    const firstBrace = jsonStr.indexOf('{');
-    if (firstBrace > 0) jsonStr = jsonStr.slice(firstBrace);
-    const lastBrace = jsonStr.lastIndexOf('}');
-    if (lastBrace !== -1 && lastBrace < jsonStr.length - 1) jsonStr = jsonStr.slice(0, lastBrace + 1);
-
+    // With structured outputs, content is guaranteed valid JSON
+    const raw = data.content?.[0]?.text || '{}';
     let parsed;
     try {
-      parsed = JSON.parse(jsonStr);
+      parsed = JSON.parse(raw);
     } catch (e) {
-      return res.status(500).json({
-        error: 'Could not parse AI response as JSON',
-        raw: raw.slice(0, 500),
-      });
+      return res.status(500).json({ error: 'Structured output parse failed', raw: raw.slice(0, 300) });
     }
 
     return res.status(200).json(parsed);
