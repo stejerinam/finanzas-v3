@@ -112,7 +112,7 @@ Be concise in reasoning (max 10 words).`;
                 properties: {
                   index:     { type: 'number' },
                   category:  { type: 'string', enum: VALID_CATEGORIES },
-                  confidence:{ type: 'number', minimum: 0, maximum: 1 },
+                  confidence:{ type: 'number' },
                   reasoning: { type: 'string' },
                 },
                 required: ['index','category','confidence','reasoning'],
