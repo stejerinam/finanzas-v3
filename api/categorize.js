@@ -1,3 +1,32 @@
+const CHUNK_SIZE = 50;
+
+const VALID_CATEGORIES = [
+  'food','cafe','groceries','transport','health','subscriptions',
+  'shopping','education','rent','entertainment','fitness','travel','other',
+  'salary','freelance','reimbursement','other_income',
+  'internal_transfer','unassigned'
+];
+
+async function callWithRetry(apiKey, body, maxRetries = 3) {
+  let lastError;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * attempt));
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (data.error) { lastError = new Error(data.error.message); continue; }
+    return data;
+  }
+  throw lastError;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -8,19 +37,32 @@ export default async function handler(req, res) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
 
-  // Format each transaction with ALL available context
-  const formatted = transactions.map((t, i) => {
-    const parts = [`${i + 1}. description: "${t.description}"`];
-    if (t.type)             parts.push(`type: "${t.type}"`);
-    if (t.reference)        parts.push(`reference: "${t.reference}"`);
-    if (t.merchantHint)     parts.push(`merchant: "${t.merchantHint}"`);
-    if (t.counterpartyName) parts.push(`counterparty: "${t.counterpartyName}"`);
-    parts.push(`amount: ${t.amount}`);
-    parts.push(`direction: ${t.direction}`);
-    return parts.join(', ');
-  }).join('\n');
+  // Split into chunks of CHUNK_SIZE
+  const chunks = [];
+  for (let i = 0; i < transactions.length; i += CHUNK_SIZE) {
+    chunks.push(transactions.slice(i, i + CHUNK_SIZE));
+  }
 
-  const prompt = `You are a personal finance transaction categorizer. You receive full transaction context and return a category and confidence score.
+  try {
+    const allResults = [];
+
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci];
+      const globalOffset = ci * CHUNK_SIZE;
+
+      const formatted = chunk.map((t, i) => {
+        const globalIndex = globalOffset + i + 1;
+        const parts = [`${globalIndex}. description: "${t.description}"`];
+        if (t.type)             parts.push(`type: "${t.type}"`);
+        if (t.reference)        parts.push(`reference: "${t.reference}"`);
+        if (t.merchantHint)     parts.push(`merchant: "${t.merchantHint}"`);
+        if (t.counterpartyName) parts.push(`counterparty: "${t.counterpartyName}"`);
+        parts.push(`amount: ${t.amount}`);
+        parts.push(`direction: ${t.direction}`);
+        return parts.join(', ');
+      }).join('\n');
+
+      const prompt = `You are a personal finance transaction categorizer. You receive full transaction context and return a category and confidence score.
 
 Context: transactions from ${country || 'Latin America'}, currency ${currency || 'local'}.
 
@@ -81,23 +123,7 @@ Return ONLY a JSON array, one object per transaction, in the same order:
 
 Be concise in reasoning (max 10 words).`;
 
-  // Valid category values for the schema
-  const VALID_CATEGORIES = [
-    'food','cafe','groceries','transport','health','subscriptions',
-    'shopping','education','rent','entertainment','fitness','travel','other',
-    'salary','freelance','reimbursement','other_income',
-    'internal_transfer','unassigned'
-  ];
-
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
+      const data = await callWithRetry(apiKey, {
         model: 'claude-sonnet-4-6',
         max_tokens: 16000,
         temperature: 0,
@@ -121,22 +147,20 @@ Be concise in reasoning (max 10 words).`;
           },
         },
         messages: [{ role: 'user', content: prompt }],
-      }),
-    });
+      });
 
-    const data = await response.json();
-    if (data.error) return res.status(502).json({ error: data.error.message });
+      const raw = data.content?.[0]?.text || '[]';
+      let chunkResults;
+      try {
+        chunkResults = JSON.parse(raw);
+      } catch (e) {
+        return res.status(500).json({ error: `Chunk ${ci + 1} parse failed`, raw: raw.slice(0, 300) });
+      }
 
-    // Structured output guarantees valid JSON array
-    const raw = data.content?.[0]?.text || '[]';
-    let results;
-    try {
-      results = JSON.parse(raw);
-    } catch (e) {
-      return res.status(500).json({ error: 'Structured output parse failed', raw: raw.slice(0, 300) });
+      allResults.push(...chunkResults);
     }
 
-    return res.status(200).json({ results });
+    return res.status(200).json({ results: allResults });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
