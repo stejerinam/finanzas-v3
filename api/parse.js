@@ -67,6 +67,7 @@ ${text.slice(0, 100000)}`;
             type: 'json_schema',
             schema: {
               type: 'object',
+              additionalProperties: false,
               properties: {
                 bank:        { type: 'string' },
                 country:     { type: 'string' },
@@ -78,6 +79,7 @@ ${text.slice(0, 100000)}`;
                   type: 'array',
                   items: {
                     type: 'object',
+                    additionalProperties: false,
                     properties: {
                       date:               { type: 'string' },
                       description:        { type: 'string' },
@@ -89,13 +91,14 @@ ${text.slice(0, 100000)}`;
                       counterpartyName:   { type: ['string','null'] },
                       counterpartyAccount:{ type: ['string','null'] },
                     },
-                    required: ['date','description','amount','direction'],
+                    required: ['date','description','amount','direction','type','reference','merchantHint','counterpartyName','counterpartyAccount'],
                   },
                 },
                 msiPlans: {
                   type: 'array',
                   items: {
                     type: 'object',
+                    additionalProperties: false,
                     properties: {
                       description:       { type: 'string' },
                       originalAmount:    { type: 'number' },
@@ -104,11 +107,11 @@ ${text.slice(0, 100000)}`;
                       installmentNumber: { type: 'number' },
                       totalInstallments: { type: 'number' },
                     },
-                    required: ['description','monthlyPayment'],
+                    required: ['description','originalAmount','pendingTotal','monthlyPayment','installmentNumber','totalInstallments'],
                   },
                 },
               },
-              required: ['bank','accountType','currency','transactions'],
+              required: ['bank','country','accountType','currency','periodStart','periodEnd','transactions','msiPlans'],
             },
           },
         },

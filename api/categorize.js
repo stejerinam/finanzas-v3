@@ -108,6 +108,7 @@ Be concise in reasoning (max 10 words).`;
               type: 'array',
               items: {
                 type: 'object',
+                additionalProperties: false,
                 properties: {
                   index:     { type: 'number' },
                   category:  { type: 'string', enum: VALID_CATEGORIES },
